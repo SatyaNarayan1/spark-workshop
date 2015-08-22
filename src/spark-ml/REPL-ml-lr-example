@@ -1,0 +1,19 @@
+import sqlContext.implicits._
+
+case class Review(rating: Double, review: String, label: Double)
+val training_data = "file:///home/bigdata/review.csv"
+val reviews = sc.textFile(training_data).map(_.split(",")).map(r => Review(r(0).trim.toDouble, r(1), r(2).trim.toDouble)).toDF()
+
+val tokenizer = new org.apache.spark.ml.feature.Tokenizer().setInputCol("review").setOutputCol("words")
+val hashingTF = new org.apache.spark.ml.feature.HashingTF().setInputCol(tokenizer.getOutputCol).setOutputCol("features")
+val lr = new org.apache.spark.ml.classification.LogisticRegression().setMaxIter(10).setRegParam(0.01)
+val pipeline = new org.apache.spark.ml.Pipeline().setStages(Array(tokenizer, hashingTF, lr))
+
+val model = pipeline.fit(reviews)
+model.transform(reviews).select("label", "review", "prediction", "probability", "rawPrediction").show()
+
+case class Test(rating: Double, review: String)
+val test_data = "file:///home/bigdata/testData.csv"
+val testData = sc.textFile(test_data).map(_.split(",")).map(r => Test(r(0).trim.toDouble, r(1))).toDF()
+model.transform(testData).select("rating", "prediction", "probability", "review", "rawPrediction").show()
+
