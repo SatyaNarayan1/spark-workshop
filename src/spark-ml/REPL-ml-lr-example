@@ -1,19 +1,38 @@
 import sqlContext.implicits._
 
+// Prepare training data, which are labeled.
 case class Review(rating: Double, review: String, label: Double)
-val training_data = "file:///home/bigdata/review.csv"
-val reviews = sc.textFile(training_data).map(_.split(",")).map(r => Review(r(0).trim.toDouble, r(1), r(2).trim.toDouble)).toDF()
+val training_datafile = "file:///home/bigdata/review.csv"
+val training_dataframe = sc.textFile(training_datafile).map(_.split(",")).map(r => Review(r(0).trim.toDouble, r(1), r(2).trim.toDouble)).toDF()
+training_dataframe.show
 
+// transformer - stage 1
 val tokenizer = new org.apache.spark.ml.feature.Tokenizer().setInputCol("review").setOutputCol("words")
+val tokenizedWords = tokenizer.transform(training_dataframe).select("words")
+tokenizedWords.collect
+
+// transformer - stage 2
 val hashingTF = new org.apache.spark.ml.feature.HashingTF().setInputCol(tokenizer.getOutputCol).setOutputCol("features")
+val featurizedData = hashingTF.transform(tokenizedWords)
+featurizedData.collect
+
+// estimator - stage 3
 val lr = new org.apache.spark.ml.classification.LogisticRegression().setMaxIter(10).setRegParam(0.01)
+
+// Configure an ML pipeline, which consists of three stages: tokenizer, hashingTF, and lr
 val pipeline = new org.apache.spark.ml.Pipeline().setStages(Array(tokenizer, hashingTF, lr))
 
-val model = pipeline.fit(reviews)
-model.transform(reviews).select("label", "review", "prediction", "probability", "rawPrediction").show()
+// Fit the pipeline to training data
+val model = pipeline.fit(training_dataframe)
+model.transform(training_dataframe).show()
 
+// Prepare test documents, which are unlabeled
 case class Test(rating: Double, review: String)
-val test_data = "file:///home/bigdata/testData.csv"
-val testData = sc.textFile(test_data).map(_.split(",")).map(r => Test(r(0).trim.toDouble, r(1))).toDF()
-model.transform(testData).select("rating", "prediction", "probability", "review", "rawPrediction").show()
+val test_datafile = "file:///home/bigdata/testData.csv"
+val test_dataframe = sc.textFile(test_datafile).map(_.split(",")).map(r => Test(r(0).trim.toDouble, r(1))).toDF()
+test_dataframe.show
+
+// Make predictions on test documents
+model.transform(test_dataframe).show()
+
 
