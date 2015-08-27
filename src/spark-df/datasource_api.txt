@@ -1,0 +1,6 @@
+val df = sqlContext.read.format("json").option("samplingRatio","0.8").load("examples/src/main/resources/people.json");
+
+df.show
+
+df.write.format("parquet").mode("append").partitionBy("name").save("fasterData");
+
