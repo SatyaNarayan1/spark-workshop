@@ -1,0 +1,29 @@
+val textFile=sc.textFile("README.md")
+
+textFile.count
+
+textFile.first
+
+val linesWithSpark = textFile.filter(_.contains("Spark"))
+
+textFile.filter(_.contains("Spark")).count
+
+textFile.map(line => line.split(" ").size).reduce((a,b)=> if(a>b) a else b)
+
+import java.lang.Math
+
+textFile.map(line => line.split(" ").size).reduce((a,b)=> Math.max(a,b))
+
+val rdd=textFile.flatMap(line=>line.split(" ")).
+map(word=>(word,1)).
+reduceByKey((a,b)=>a+b);
+
+rdd.collect
+
+linesWithSpark.cache
+
+linesWithSpark.count
+
+rdd.filter(_._1.equals("Spark")).collect.foreach(println)
+
+rdd.filter{case (k,v) => if(k.equals("Spark")) true else false}.collect.foreach(println)
