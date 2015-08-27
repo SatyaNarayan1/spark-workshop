@@ -1,0 +1,110 @@
+//Spark ML Pipeline Demo
+
+import org.apache.spark.{SparkConf, SparkContext}
+import org.apache.spark.sql.SQLContext
+
+val sqlContext = new SQLContext(sc)
+import sqlContext.implicits._
+
+// Prepare training data set (data frame), which are labeled
+
+case class Review(rating: Double, review: String, label: Double)
+
+/*
+val training_dataframe = 
+sc.textFile("swift://spark-ml-demo.spark/review.csv").
+map(_.split(",")).
+map(r => Review(r(0).trim.toDouble, r(1), r(2).trim.toDouble)).
+toDF()
+*/
+
+val training_dataframe = sc.parallelize(
+    Seq(
+        Review(4.5, "this is a amazing product", 1.0),
+        Review(1.0, "i want to return this product", 0.0),
+        Review(4.0, "very nice product", 1.0),
+        Review(4.0, "amazing product", 1.0),    
+        Review(0.5, "return product", 0.0),
+        Review(0.0, "bad product, i dont need this", 0.0),
+        Review(0.5, "amazingly bad quality product, dont buy this", 0.0)
+    )
+).toDF()
+
+training_dataframe.show
+
+// Transformer - PipelineStage1
+
+val tokenizer = 
+new org.apache.spark.ml.feature.Tokenizer().
+setInputCol("review").
+setOutputCol("words")
+
+val tokenizedWords = 
+tokenizer.
+transform(training_dataframe).
+select(tokenizer.getOutputCol)
+
+tokenizedWords.collect
+
+// Transformer - PipelineStage2
+
+val hashingTF = 
+new org.apache.spark.ml.feature.HashingTF().
+setInputCol(tokenizer.getOutputCol).
+setOutputCol("features")
+
+val featurizedData = 
+hashingTF.
+transform(tokenizedWords)
+
+featurizedData.collect
+
+// Estimator - PipelineStage3
+
+val lr = new org.apache.spark.ml.classification.LogisticRegression().
+setMaxIter(10).
+setRegParam(0.01)
+
+// Configure an ML pipeline, which consists of three stages: tokenizer, hashingTF, and lr
+
+val pipeline = new org.apache.spark.ml.Pipeline().setStages(Array(tokenizer, hashingTF, lr))
+
+// Fit the pipeline to training data
+
+val model = pipeline.fit(training_dataframe)
+
+model.transform(training_dataframe).select("rating", "review", "label", "features", "probability", "prediction").show()
+
+// Prepare test data set (data frame), which are not labeled
+
+case class Test(rating: Double, review: String)
+
+/*
+val test_dataframe = 
+sc.textFile("swift://spark-ml-demo.spark/testData.csv").
+map(_.split(",")).
+map(r => Test(r(0).trim.toDouble, r(1))).
+toDF()
+*/
+
+val test_dataframe = sc.parallelize(
+    Seq(
+        Test(4.5, "very good product"),
+        Test(1.0, "returning this product"),
+        Test(4.0, "nice product"),
+        Test(2.0, "bad product"),    
+        Test(0.5, "return product"),
+        Test(0.0, "i dont like this product"),
+        Test(0.5, "bad quality, dont buy this product"),
+        Test(4.5, "amazing qality product"),
+        Test(0.5, "very bad product. i am going to return this"),
+        Test(0.5, "bad or good quality, dont buy this product")
+    )
+).toDF()
+
+test_dataframe.show
+
+// Make predictions on test documents
+
+model.transform(test_dataframe).select("rating", "review", "features", "probability", "prediction").show()
+
